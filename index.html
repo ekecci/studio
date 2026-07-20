@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Mission Control</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#1a1a1a">
+<style>
+  :root { color-scheme:light; --ink:#1a1a1a; --paper:#faf8f4; --card:#fff; --line:#e6e1d8; --muted:#8a8578; --tmi:#b8503c; --rel:#3c5a48; --need:#b8503c; }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--paper);color:var(--ink);font:15px/1.5 "Helvetica Neue",Arial,sans-serif;padding:calc(env(safe-area-inset-top,0px) + 16px) 14px 40px;}
+  h1{font-family:Georgia,serif;font-weight:400;font-size:20px;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:4px;}
+  .sub{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:16px;}
+  nav{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap;}
+  nav button{border:1px solid var(--line);background:var(--card);padding:8px 12px;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
+  nav button.on{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+  section{display:none;} section.on{display:block;}
+  .card{background:var(--card);border:1px solid var(--line);padding:14px;margin-bottom:12px;}
+  .card h3{font-family:Georgia,serif;font-weight:400;font-size:16px;margin-bottom:4px;}
+  .d{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+  .body{font-size:13px;white-space:pre-wrap;border-left:2px solid var(--line);padding-left:10px;}
+  .needs{font-size:13px;margin-top:8px;} .needs b{color:var(--need);}
+  .tag{font-size:9px;letter-spacing:1px;text-transform:uppercase;padding:2px 7px;color:#fff;display:inline-block;}
+  .tag.TMI{background:var(--tmi);} .tag.ISSUE{background:var(--rel);}
+  .row{padding:8px 0;border-bottom:1px dotted var(--line);font-size:13px;}
+  .row b{font-family:Georgia,serif;font-weight:400;}
+  .row .m{color:var(--muted);font-size:11px;}
+  .empty{color:var(--muted);font-style:italic;font-size:13px;padding:8px 0;}
+  a{color:var(--ink);}
+  .hint{border:1px dashed var(--muted);padding:12px;font-size:12px;color:var(--muted);margin-top:14px;}
+  .hint b{color:var(--ink);}
+  #gate{position:fixed;inset:0;background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:30px;z-index:10;}
+  #gate h1{border:none;}
+  #gate input{border:1px solid var(--ink);background:var(--card);padding:12px;font-size:16px;width:100%;max-width:320px;text-align:center;letter-spacing:1px;}
+  #gate button{border:1px solid var(--ink);background:var(--ink);color:var(--paper);padding:12px 26px;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;}
+  #gate .err{color:var(--need);font-size:13px;min-height:18px;}
+  #refresh{border:1px solid var(--line);background:var(--card);color:var(--muted);padding:4px 10px;font-size:10px;letter-spacing:1px;text-transform:uppercase;float:right;margin-top:-2px;}
+</style>
+</head>
+<body>
+<div id="gate">
+  <h1>Mission Control</h1>
+  <div class="sub">The Modern Issue × The Issue</div>
+  <input id="pass" type="password" placeholder="Studio key" autocomplete="current-password">
+  <button onclick="unlock()">Enter the studio</button>
+  <div class="err" id="gateErr"></div>
+</div>
+
+<h1>Mission Control <span style="color:var(--muted);font-style:italic;font-size:14px">studio</span><button id="refresh" onclick="loadData(true)">&#8635; refresh</button></h1>
+<div class="sub" id="meta">&mdash;</div>
+<nav>
+  <button data-t="today" class="on">Today</button>
+  <button data-t="archive">Archive</button>
+  <button data-t="team">Team</button>
+  <button data-t="links">Links</button>
+</nav>
+<section id="t-today" class="on"><div class="empty">Loading&hellip;</div></section>
+<section id="t-archive"></section>
+<section id="t-team"></section>
+<section id="t-links">
+  <div class="card">
+    <h3>Quick links</h3>
+    <div class="row"><a href="https://drive.google.com/drive/folders/1qKX_n0bWlxMIjdARiuEunLehb6nuD9Vb">Studio Drive folder</a><div class="m">archive of all deliverables</div></div>
+    <div class="row"><a href="https://www.canva.com/d/ZELSSBFZ44szsdk">Canva &mdash; TMI post template</a><div class="m">Instagram Post &middot; Archive Aesthetics</div></div>
+    <div class="row"><a href="https://www.canva.com/d/aREexOYMR4GoAOo">Canva &mdash; reels template</a><div class="m">9:16 &middot; 17 pages</div></div>
+    <div class="row"><a href="https://buffer.com">Buffer</a><div class="m">Instagram queue</div></div>
+  </div>
+  <div class="hint">Send photos to the studio: <b>OneDrive app</b> &rarr; Documents/Claude/Projects/The Modern Issue &rarr; intake/modern-issue or intake/the-issue. Multiple angles for jewelry pieces + a context note.</div>
+  <div class="hint" style="margin-top:8px">Lock the app: <a href="#" onclick="localStorage.removeItem('studio-key');location.reload();return false">forget the studio key on this phone</a></div>
+</section>
+<div class="hint">Command the studio: open the <b>Claude app</b> &rarr; The Modern Issue project &rarr; message an agent, e.g. <b>"M1: curate this"</b> + photos, or <b>"M4: status of the week"</b>. Data updates with every studio run &mdash; tap &#8635;.</div>
+
+<script>
+const TEAM=[
+{brand:"TMI",name:"M1 · The Curator",role:"Your idea + images in → layout, fact-check, references out.",cmd:"M1: curate this — [idea] (+ photos)"},
+{brand:"TMI",name:"M2 · The Documenter",role:"Files every deliverable in Drive + the archive.",cmd:"M2: document the latest deliverables"},
+{brand:"TMI",name:"M3 · Media & Marketing",role:"IG plans, reels structure, your soundtracks.",cmd:"M3: IG plan for [content] with this sound: [link]"},
+{brand:"TMI",name:"M4 · The Team Manager",role:"Runs the office — Canva templates, Buffer queue, weekly status.",cmd:"M4: run the week — status + fill the post template"},
+{brand:"ISSUE",name:"I1 · The Modeler",role:"3D modeling guidance per piece.",cmd:"I1: modeling plan for piece [n] in [software]"},
+{brand:"ISSUE",name:"I2 · The Information Curator",role:"Dossier: era, region, provenance, comparables.",cmd:"I2: new piece (+ photos + where found)"},
+{brand:"ISSUE",name:"I3 · The Documenter",role:"Template + magazine + Drive filing per piece.",cmd:"I3: file piece [n] into the template"},
+{brand:"ISSUE",name:"I4 · The Proceeder",role:"IG + website + Vinted listing per documented piece.",cmd:"I4: take piece [n] to IG + Vinted"}];
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on'));
+  document.querySelectorAll('section').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); document.getElementById('t-'+b.dataset.t).classList.add('on');
+});
+async function decryptPayload(b64,pass){
+  const raw=Uint8Array.from(atob(b64.replace(/\s/g,'')),c=>c.charCodeAt(0));
+  const salt=raw.slice(0,16), iv=raw.slice(16,28), ct=raw.slice(28);
+  const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);
+  const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:salt,iterations:150000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['decrypt']);
+  const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:iv},key,ct);
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+function render(D){
+  document.getElementById('meta').textContent='WEEK '+(D.week||'—')+' · '+(D.region||'')+' · updated '+(D.updated||'');
+  const reps=D.reports||[];
+  document.getElementById('t-today').innerHTML=reps.length
+    ? reps.slice(0,6).map(r=>'<div class="card"><div class="d">'+esc(r.date||'')+'</div><h3>'+esc(r.title||'Standup')+'</h3><div class="body">'+esc(r.body||'')+'</div>'+((r.needs&&r.needs.length)?'<div class="needs"><b>Needs you:</b> '+r.needs.map(esc).join(' · ')+'</div>':'')+'</div>').join('')
+    : '<div class="empty">No reports yet — the next studio run writes the first one.</div>';
+  const arch=D.archive||[];
+  document.getElementById('t-archive').innerHTML=arch.length
+    ? arch.slice().reverse().map(e=>'<div class="row"><span class="tag '+esc(e.brand||'TMI')+'">'+esc(e.brand||'')+'</span> <b>'+esc(e.title||'')+'</b><div class="m">'+esc(e.date||'')+' · '+esc(e.pillar||'')+' · '+esc((e.tags||[]).join(', '))+' · '+esc(e.status||'')+'</div></div>').join('')
+    : '<div class="empty">Archive is empty — drop content into intake and run the daily update.</div>';
+  document.getElementById('t-team').innerHTML=TEAM.map(a=>'<div class="card"><span class="tag '+a.brand+'">'+(a.brand==='TMI'?'The Modern Issue':'The Issue')+'</span><h3>'+esc(a.name)+'</h3><div style="font-size:13px;color:var(--muted)">'+esc(a.role)+'</div><div style="font-size:12px;margin-top:6px">Text in Claude app: <b>'+esc(a.cmd)+'</b></div></div>').join('');
+}
+async function loadData(fresh){
+  const pass=localStorage.getItem('studio-key');
+  if(!pass) return false;
+  try{
+    const r=await fetch('data.enc?t='+(fresh?Date.now():'0'),{cache:fresh?'reload':'default'});
+    const b64=await r.text();
+    const D=await decryptPayload(b64,pass);
+    render(D);
+    document.getElementById('gate').style.display='none';
+    return true;
+  }catch(e){ return false; }
+}
+async function unlock(){
+  const p=document.getElementById('pass').value.trim();
+  if(!p) return;
+  localStorage.setItem('studio-key',p);
+  document.getElementById('gateErr').textContent='';
+  const ok=await loadData(true);
+  if(!ok){ localStorage.removeItem('studio-key'); document.getElementById('gateErr').textContent='Wrong key — check .studio-key in the project folder.'; }
+}
+document.getElementById('pass').addEventListener('keydown',e=>{ if(e.key==='Enter') unlock(); });
+if(localStorage.getItem('studio-key')) loadData(true);
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
