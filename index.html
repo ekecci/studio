@@ -54,11 +54,33 @@
 <div class="sub" id="meta">&mdash;</div>
 <nav>
   <button data-t="today" class="on">Today</button>
+  <button data-t="send">Send</button>
   <button data-t="archive">Archive</button>
   <button data-t="team">Team</button>
   <button data-t="links">Links</button>
 </nav>
 <section id="t-today" class="on"><div class="empty">Loading&hellip;</div></section>
+<section id="t-send">
+  <div class="card">
+    <h3>Send work to the studio</h3>
+    <div class="d">photos + a message &rarr; encrypted &rarr; processed by the next studio run</div>
+    <select id="sAgent" style="width:100%;border:1px solid var(--line);padding:10px;font-size:14px;margin-bottom:8px;background:var(--paper)">
+      <option value="M1">M1 &middot; The Curator (TMI content)</option>
+      <option value="M2">M2 &middot; The Documenter</option>
+      <option value="M3">M3 &middot; Media &amp; Marketing</option>
+      <option value="M4">M4 &middot; The Team Manager</option>
+      <option value="I1">I1 &middot; The Modeler</option>
+      <option value="I2">I2 &middot; The Information Curator (new piece)</option>
+      <option value="I3">I3 &middot; The Documenter</option>
+      <option value="I4">I4 &middot; The Proceeder</option>
+    </select>
+    <textarea id="sNote" placeholder="What should they do with this? Context, where found, what you want&hellip;" style="width:100%;height:90px;border:1px solid var(--line);padding:10px;font-size:14px;background:var(--paper);resize:vertical"></textarea>
+    <input id="sFiles" type="file" accept="image/*" multiple style="margin:10px 0;font-size:13px;width:100%">
+    <button onclick="sendToStudio()" style="border:1px solid var(--ink);background:var(--ink);color:var(--paper);padding:12px 22px;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;width:100%">Send to studio</button>
+    <div id="sStatus" class="empty" style="min-height:20px"></div>
+  </div>
+  <div class="hint">Sent items wait in the studio inbox and are processed on the next run (09:00 daily, or press Run daily update on the desktop, or tell Claude "run the daily update"). For instant back-and-forth, message the agent in the <b>Claude app</b>.</div>
+</section>
 <section id="t-archive"></section>
 <section id="t-team"></section>
 <section id="t-links">
@@ -98,7 +120,9 @@ async function decryptPayload(b64,pass){
   const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:iv},key,ct);
   return JSON.parse(new TextDecoder().decode(pt));
 }
+let GHTOKEN=null;
 function render(D){
+  GHTOKEN=D.gh||null;
   document.getElementById('meta').textContent='WEEK '+(D.week||'—')+' · '+(D.region||'')+' · updated '+(D.updated||'');
   const reps=D.reports||[];
   document.getElementById('t-today').innerHTML=reps.length
@@ -132,6 +156,51 @@ async function unlock(){
 }
 document.getElementById('pass').addEventListener('keydown',e=>{ if(e.key==='Enter') unlock(); });
 if(localStorage.getItem('studio-key')) loadData(true);
+
+function b64bytes(u8){let s='';const CH=0x8000;for(let i=0;i<u8.length;i+=CH){s+=String.fromCharCode.apply(null,u8.subarray(i,i+CH));}return btoa(s);}
+async function encBytes(bytes,pass){
+  const salt=crypto.getRandomValues(new Uint8Array(16)), iv=crypto.getRandomValues(new Uint8Array(12));
+  const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);
+  const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:salt,iterations:150000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['encrypt']);
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},key,bytes));
+  const out=new Uint8Array(salt.length+iv.length+ct.length);
+  out.set(salt,0); out.set(iv,16); out.set(ct,28);
+  return out;
+}
+async function putRepoFile(path,contentB64){
+  const r=await fetch('https://api.github.com/repos/ekecci/studio/contents/'+path,{
+    method:'PUT',
+    headers:{'Authorization':'token '+GHTOKEN,'Accept':'application/vnd.github+json','Content-Type':'application/json'},
+    body:JSON.stringify({message:'studio inbox',content:contentB64})
+  });
+  if(!r.ok) throw new Error('upload failed '+r.status);
+}
+async function sendToStudio(){
+  const st=document.getElementById('sStatus');
+  const pass=localStorage.getItem('studio-key');
+  if(!GHTOKEN||!pass){ st.textContent='Not connected — refresh the app first.'; return; }
+  const agent=document.getElementById('sAgent').value;
+  const note=document.getElementById('sNote').value.trim();
+  const files=document.getElementById('sFiles').files;
+  if(!note&&!files.length){ st.textContent='Add a message or photos first.'; return; }
+  const ts=Date.now();
+  try{
+    st.textContent='Encrypting & sending…';
+    const meta={agent:agent,note:note,date:new Date().toISOString().slice(0,10),files:files.length};
+    const metaEnc=await encBytes(new TextEncoder().encode(JSON.stringify(meta)),pass);
+    await putRepoFile('inbox/'+ts+'-note.enc',b64bytes(metaEnc));
+    for(let i=0;i<files.length;i++){
+      st.textContent='Sending photo '+(i+1)+' of '+files.length+'…';
+      const buf=new Uint8Array(await files[i].arrayBuffer());
+      const enc=await encBytes(buf,pass);
+      const safe=files[i].name.replace(/[^a-zA-Z0-9._-]/g,'_');
+      await putRepoFile('inbox/'+ts+'-'+i+'-'+safe+'.enc',b64bytes(enc));
+    }
+    st.textContent='✓ Sent to '+agent+' — will be processed on the next studio run.';
+    document.getElementById('sNote').value=''; document.getElementById('sFiles').value='';
+  }catch(e){ st.textContent='Send failed — check connection and try again.'; }
+}
+
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 </body>
