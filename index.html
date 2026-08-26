@@ -38,6 +38,19 @@
   #gate input{border:1px solid var(--ink);background:var(--card);padding:12px;font-size:16px;width:100%;max-width:320px;text-align:center;letter-spacing:1px;}
   #gate button{border:1px solid var(--ink);background:var(--ink);color:var(--paper);padding:12px 26px;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;}
   #gate .err{color:var(--need);font-size:13px;min-height:18px;}
+  .gate-item{background:var(--card);border:1px solid var(--line);border-left:4px solid #c9a227;padding:12px;margin-bottom:10px;}
+  .gate-item.mine{border-left-color:var(--need);}
+  .gate-item h3{font-family:Georgia,serif;font-weight:400;font-size:15px;margin:4px 0 2px;}
+  .gate-item .st{font-size:11px;color:var(--muted);}
+  .gate-item .op{font-size:12.5px;margin-top:7px;color:#5c544b;}
+  .bigcount{font-family:Georgia,serif;font-size:34px;line-height:1;}
+  .bigcount span{font-size:13px;font-family:"Helvetica Neue",Arial,sans-serif;color:var(--muted);letter-spacing:1.4px;text-transform:uppercase;}
+  .qgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;}
+  .qbtn{border:1px solid var(--line);background:var(--paper);padding:10px 6px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--ink);}
+  .qbtn:active{background:var(--ink);color:var(--paper);}
+  .alertbar{background:var(--card);border:1px solid var(--line);padding:11px 13px;font-size:12.5px;margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  .alertbar button{border:1px solid var(--ink);background:var(--ink);color:var(--paper);padding:7px 13px;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;}
+  .alertbar.on{border-color:var(--rel);} .alertbar.on b{color:var(--rel);}
   #refresh{border:1px solid var(--line);background:var(--card);color:var(--muted);padding:4px 10px;font-size:10px;letter-spacing:1px;text-transform:uppercase;float:right;margin-top:-2px;}
 </style>
 </head>
@@ -53,13 +66,15 @@
 <h1>Mission Control <span style="color:var(--muted);font-style:italic;font-size:14px">studio</span><button id="refresh" onclick="loadData(true)">&#8635; refresh</button></h1>
 <div class="sub" id="meta">&mdash;</div>
 <nav>
-  <button data-t="today" class="on">Today</button>
+  <button data-t="needs" class="on">Needs you</button>
+  <button data-t="today">Today</button>
   <button data-t="send">Send</button>
   <button data-t="archive">Archive</button>
   <button data-t="team">Team</button>
   <button data-t="links">Links</button>
 </nav>
-<section id="t-today" class="on"><div class="empty">Loading&hellip;</div></section>
+<section id="t-needs" class="on"><div class="empty">Loading&hellip;</div></section>
+<section id="t-today"><div class="empty">Loading&hellip;</div></section>
 <section id="t-send">
   <div class="card">
     <h3>Send work to the studio</h3>
@@ -79,7 +94,7 @@
     <button onclick="sendToStudio()" style="border:1px solid var(--ink);background:var(--ink);color:var(--paper);padding:12px 22px;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;width:100%">Send to studio</button>
     <div id="sStatus" class="empty" style="min-height:20px"></div>
   </div>
-  <div class="hint">Sent items wait in the studio inbox and are processed on the next run (09:00 daily, or press Run daily update on the desktop, or tell Claude "run the daily update"). For instant back-and-forth, message the agent in the <b>Claude app</b>.</div>
+  <div class="hint">Sent items wait in the studio inbox and are processed on the next studio run (Mon/Wed/Fri 17:00), or tell Claude "run the daily update". For instant back-and-forth, message the agent in the <b>Claude app</b>.</div>
 </section>
 <section id="t-archive"></section>
 <section id="t-team"></section>
@@ -91,7 +106,7 @@
     <div class="row"><a href="https://www.canva.com/d/aREexOYMR4GoAOo">Canva &mdash; reels template</a><div class="m">9:16 &middot; 17 pages</div></div>
     <div class="row"><a href="https://buffer.com">Buffer</a><div class="m">Instagram queue</div></div>
   </div>
-  <div class="hint">Send photos to the studio: <b>OneDrive app</b> &rarr; Documents/Claude/Projects/The Modern Issue &rarr; intake/modern-issue or intake/the-issue. Multiple angles for jewelry pieces + a context note.</div>
+  <div class="hint">Send photos to the studio: <b>OneDrive app</b> &rarr; Documents/Claude/Projects/The Modern Issue &rarr; intake/modern-issue or intake/the-issue <b>(that path never changes)</b>. Multiple angles for jewelry pieces + a context note.</div>
   <div class="hint" style="margin-top:8px">Lock the app: <a href="#" onclick="localStorage.removeItem('studio-key');location.reload();return false">forget the studio key on this phone</a></div>
 </section>
 <div class="hint">Command the studio: open the <b>Claude app</b> &rarr; The Modern Issue project &rarr; message an agent, e.g. <b>"M1: curate this"</b> + photos, or <b>"M4: status of the week"</b>. Data updates with every studio run &mdash; tap &#8635;.</div>
@@ -132,6 +147,7 @@ function render(D){
   document.getElementById('t-archive').innerHTML=arch.length
     ? arch.slice().reverse().map(e=>'<div class="row"><span class="tag '+esc(e.brand||'TMI')+'">'+esc(e.brand||'')+'</span> <b>'+esc(e.title||'')+'</b><div class="m">'+esc(e.date||'')+' · '+esc(e.pillar||'')+' · '+esc((e.tags||[]).join(', '))+' · '+esc(e.status||'')+'</div></div>').join('')
     : '<div class="empty">Archive is empty — drop content into intake and run the daily update.</div>';
+  renderNeeds(D);
   document.getElementById('t-team').innerHTML=TEAM.map(a=>'<div class="card"><span class="tag '+a.brand+'">'+(a.brand==='TMI'?'The Modern Issue':'The Issue')+'</span><h3>'+esc(a.name)+'</h3><div style="font-size:13px;color:var(--muted)">'+esc(a.role)+'</div><div style="font-size:12px;margin-top:6px">Text in Claude app: <b>'+esc(a.cmd)+'</b></div></div>').join('');
 }
 async function loadData(fresh){
@@ -199,6 +215,98 @@ async function sendToStudio(){
     st.textContent='✓ Sent to '+agent+' — will be processed on the next studio run.';
     document.getElementById('sNote').value=''; document.getElementById('sFiles').value='';
   }catch(e){ st.textContent='Send failed — check connection and try again.'; }
+}
+
+/* ---------- Needs you: the gates, and the buttons that move them ---------- */
+const LINES={
+  TMI:{label:'The Modern Issue',stages:['Source','Curate','Document','Publish-prep','You post']},
+  ISSUE:{label:'The Issue',stages:['Find & intake','Research & model','Document','Shop & story','You list & post']}
+};
+function renderNeeds(D){
+  const gates=(D.gates||[]);
+  const waiting=gates.filter(g=>g.state==='gate');
+  const mine=gates.filter(g=>g.state==='you');
+  const needs=((D.reports||[])[0]||{}).needs||[];
+  let h='<div id="alertbar" class="alertbar"></div>';
+  h+='<div class="card"><div class="bigcount">'+waiting.length+' <span>waiting on your approval</span></div>'
+    +(mine.length?'<div style="font-size:12.5px;color:var(--muted);margin-top:6px">'+mine.length+' yours to do</div>':'')
+    +'<div class="d" style="margin-top:10px">updated '+esc(D.updated||'')+'</div></div>';
+  if(!gates.length) h+='<div class="empty">Nothing on the line yet.</div>';
+  gates.forEach(g=>{
+    const L=LINES[g.brand]||LINES.TMI;
+    h+='<div class="gate-item'+(g.state==='you'?' mine':'')+'">'
+      +'<span class="tag '+esc(g.brand)+'">'+esc(L.label)+'</span>'
+      +'<h3>'+esc(g.title||'')+'</h3>'
+      +'<div class="st">at <b>'+esc(L.stages[g.stage]||'')+'</b>'+(g.state==='you'?' · yours to do':' · waiting on you')+'</div>'
+      +(g.opens?'<div class="op">'+esc(g.opens)+'</div>':'')
+      +'</div>';
+  });
+  if(needs.length) h+='<div class="card"><h3>From the last standup</h3><div class="needs">'+needs.map(n=>'<div style="padding:4px 0">· '+esc(n)+'</div>').join('')+'</div></div>';
+  h+='<div class="card"><h3>Queue a stage for the next run</h3>'
+    +'<div class="d">one stage only · it stops and reports back</div>';
+  ['TMI','ISSUE'].forEach(b=>{
+    h+='<div style="margin-top:10px"><span class="tag '+b+'">'+LINES[b].label+'</span><div class="qgrid">';
+    const acts=b==='TMI'?[['phase0','Source'],['phase1','Curate'],['phase2','Document'],['phase3','Publish-prep']]
+                        :[['phase1','Research & model'],['phase2','Document'],['phase3','Shop & story'],['studio-update','Just document intake']];
+    acts.forEach(a=>{ h+='<button class="qbtn" onclick="queueStage(\''+b+'\',\''+a[0]+'\')">'+a[1]+'</button>'; });
+    h+='</div></div>';
+  });
+  h+='<div id="qStatus" class="empty" style="min-height:18px"></div></div>';
+  document.getElementById('t-needs').innerHTML=h;
+  paintAlertBar();
+  const n=waiting.length+mine.length;
+  if(navigator.setAppBadge){ n?navigator.setAppBadge(n).catch(()=>{}):navigator.clearAppBadge().catch(()=>{}); }
+  maybeNotify(waiting.length, mine.length);
+}
+async function queueStage(office,action){
+  const st=document.getElementById('qStatus');
+  const pass=localStorage.getItem('studio-key');
+  if(!GHTOKEN||!pass){ st.textContent='Not connected — pull to refresh first.'; return; }
+  try{
+    st.textContent='Queueing…';
+    const req={type:'request',office:office,action:action,date:new Date().toISOString().slice(0,10)};
+    const enc=await encBytes(new TextEncoder().encode(JSON.stringify(req)),pass);
+    await putRepoFile('inbox/'+Date.now()+'-request.enc',b64bytes(enc));
+    st.textContent='✓ Queued — runs on the next studio update (Mon/Wed/Fri 17:00), or say "run the daily update" in Claude.';
+  }catch(e){ st.textContent='Could not queue — check connection.'; }
+}
+
+/* ---------- Alerts ----------
+   No server, so no true push. What works: a badge on the icon, an alert when you
+   open the app and something changed, and — on Android with the app installed —
+   a periodic background check. iPhone will do the badge and the on-open alert only. */
+function paintAlertBar(){
+  const el=document.getElementById('alertbar'); if(!el) return;
+  const p=(window.Notification&&Notification.permission)||'unsupported';
+  if(p==='granted'){ el.className='alertbar on'; el.innerHTML='<b>Alerts on.</b> You will be told when a gate starts waiting.'; }
+  else if(p==='unsupported'){ el.innerHTML='This browser will not do alerts. Add the app to your home screen and open it from there.'; }
+  else { el.innerHTML='<span>Get told when something needs you.</span><button onclick="enableAlerts()">Turn on alerts</button>'; }
+}
+async function enableAlerts(){
+  try{
+    const p=await Notification.requestPermission();
+    if(p==='granted'){
+      const reg=await navigator.serviceWorker.ready;
+      if('periodicSync' in reg){
+        try{ const st=await navigator.permissions.query({name:'periodic-background-sync'});
+          if(st.state==='granted') await reg.periodicSync.register('studio-check',{minInterval:6*60*60*1000});
+        }catch(e){}
+      }
+      new Notification('Studio alerts on',{body:'You will hear when a gate is waiting.',icon:'icon-192.png'});
+    }
+    paintAlertBar();
+  }catch(e){ paintAlertBar(); }
+}
+function maybeNotify(waiting,mine){
+  if(!window.Notification||Notification.permission!=='granted') return;
+  const key='studio-last-seen';
+  let last=0; try{ last=parseInt(localStorage.getItem(key)||'0',10)||0; }catch(e){}
+  if(waiting>last){
+    try{ new Notification('The studio needs you',{
+      body:waiting+' gate'+(waiting===1?'':'s')+' waiting on your approval'+(mine?', '+mine+' yours to do':''),
+      icon:'icon-192.png', tag:'studio-gates'}); }catch(e){}
+  }
+  try{ localStorage.setItem(key,String(waiting)); }catch(e){}
 }
 
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
