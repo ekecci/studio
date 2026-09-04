@@ -31,6 +31,11 @@
   .row .m{color:var(--muted);font-size:11px;}
   .empty{color:var(--muted);font-style:italic;font-size:13px;padding:8px 0;}
   a{color:var(--ink);}
+  .lg{margin-top:10px;border-top:1px dotted var(--line);padding-top:8px;}
+  .lgh{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:5px;}
+  .lge{font-size:12px;padding:3px 0;color:var(--ink);}
+  .lge span{color:var(--muted);display:inline-block;min-width:52px;font-size:11px;}
+  .opennow{margin-top:7px;font-size:12px;color:var(--need);}
   .ln{background:var(--card);border:1px solid var(--line);padding:14px;margin-bottom:12px;}
   .ln h3{font-family:Georgia,serif;font-weight:400;font-size:16px;margin:4px 0 10px;}
   .stp{display:flex;gap:10px;padding:7px 0;border-bottom:1px dotted var(--line);align-items:flex-start;}
@@ -141,14 +146,15 @@
 
 <script>
 const TEAM=[
-{brand:"TMI",name:"M1 · The Curator",role:"Your idea + images in → layout, fact-check, references out.",cmd:"M1: curate this — [idea] (+ photos)"},
-{brand:"TMI",name:"M2 · The Documenter",role:"Files every deliverable in Drive + the archive.",cmd:"M2: document the latest deliverables"},
-{brand:"TMI",name:"M3 · Media & Marketing",role:"IG plans, reels structure, your soundtracks.",cmd:"M3: IG plan for [content] with this sound: [link]"},
-{brand:"TMI",name:"M4 · The Team Manager",role:"Runs the office — Canva templates, Buffer queue, weekly status.",cmd:"M4: run the week — status + fill the post template"},
-{brand:"ISSUE",name:"I1 · The Modeler",role:"3D modeling guidance per piece.",cmd:"I1: modeling plan for piece [n] in [software]"},
-{brand:"ISSUE",name:"I2 · The Information Curator",role:"Dossier: era, region, provenance, comparables.",cmd:"I2: new piece (+ photos + where found)"},
-{brand:"ISSUE",name:"I3 · The Documenter",role:"Template + magazine + Drive filing per piece.",cmd:"I3: file piece [n] into the template"},
-{brand:"ISSUE",name:"I4 · The Proceeder",role:"IG + website + Vinted listing per documented piece.",cmd:"I4: take piece [n] to IG + Vinted"}];
+{id:"om",brand:"TMI",name:"OM · The Office Manager",role:"Works out which office and which stage comes next, runs that one, files it, stops at the gate. Files beat the board.",cmd:"run the next step"},
+{id:"m1",brand:"TMI",name:"M1 · The Curator",role:"Stages 0 and 1. Finds its own content and brings 3–5 options; after you pick, builds the whole post — copy, layout, images, Canva.",cmd:"M1: find options for [slot]  ·  M1: curate the one I picked"},
+{id:"m2",brand:"TMI",name:"M2 · The Documenter",role:"Stage 2. Every reference and every image, re-checked and filed in Drive and the archive.",cmd:"M2: document the latest deliverable"},
+{id:"m3",brand:"TMI",name:"M3 · Media & Marketing",role:"Stage 3. Best time, best caption, how it reaches people. Timing is inferred while Chrome is down.",cmd:"M3: IG plan for [content]"},
+{id:"m4",brand:"TMI",name:"M4 · The Team Manager",role:"Stage 4. The quality check — the last read before you. Since 28 Aug it no longer fills Canva; M1 owns that.",cmd:"M4: check [post] before I post it"},
+{id:"i1",brand:"ISSUE",name:"I1 · The Modeler",role:"Stage 1, beside I2. Modeling plan from your photographs. Blocked without measurements.",cmd:"I1: modeling plan for TI-[n]"},
+{id:"i2",brand:"ISSUE",name:"I2 · The Information Curator",role:"Stage 1, beside I1. Era, region, materials, provenance, comparables, with a verified/inferred/open claim register.",cmd:"I2: new piece (+ photos + where found)"},
+{id:"i3",brand:"ISSUE",name:"I3 · The Documenter",role:"Stage 2. Piece record, ID, and the Drive tree per piece.",cmd:"I3: file TI-[n]"},
+{id:"i4",brand:"ISSUE",name:"I4 · The Proceeder",role:"Stage 3. Carousel, magazine spread, website copy, shop listing. Never a planted error — The Issue is selling it.",cmd:"I4: take TI-[n] to IG + listing"}];
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on'));
@@ -178,7 +184,7 @@ function render(D){
   renderNeeds(D);
   renderCompose(D);
   renderLine(D);
-  document.getElementById('t-team').innerHTML=TEAM.map(a=>'<div class="card"><span class="tag '+a.brand+'">'+(a.brand==='TMI'?'The Modern Issue':'The Issue')+'</span><h3>'+esc(a.name)+'</h3><div style="font-size:13px;color:var(--muted)">'+esc(a.role)+'</div><div style="font-size:12px;margin-top:6px">Text in Claude app: <b>'+esc(a.cmd)+'</b></div></div>').join('');
+  renderTeam(D);
 }
 async function loadData(fresh){
   const pass=localStorage.getItem('studio-key');
@@ -247,6 +253,27 @@ async function sendToStudio(){
     st.textContent='✓ Sent to '+agent+'. Say \'run the next step\' in Claude to have it picked up now.';
     document.getElementById('sNote').value=''; document.getElementById('sFiles').value='';
   }catch(e){ st.textContent='Send failed — check connection and try again.'; }
+}
+
+/* ---------- Team: role, how to call it, and what it has learned ----------
+   The log comes from studio-state.json agents[].log — written since August and, until now,
+   displayed nowhere. Newest entries first. NOTES.md on each desk is the fuller memory. */
+function renderTeam(D){
+  const logs={}; (D.agents||[]).forEach(a=>{ logs[a.id]=a; });
+  document.getElementById('t-team').innerHTML=TEAM.map(t=>{
+    const a=logs[t.id]||{};
+    const lg=(a.log||[]).slice(-4).reverse();
+    const tk=(a.tasks||[]).filter(x=>!x.done);
+    return '<div class="card"><span class="tag '+t.brand+'">'+(t.brand==='TMI'?'The Modern Issue':'The Issue')+'</span>'
+      +'<h3>'+esc(t.name)+'</h3>'
+      +(a.status?'<div class="d">'+esc(a.status)+'</div>':'')
+      +'<div style="font-size:13px;color:var(--muted)">'+esc(t.role)+'</div>'
+      +(tk.length?'<div class="opennow">'+tk.map(x=>'<div>· '+esc(x.t)+'</div>').join('')+'</div>':'')
+      +(lg.length?'<div class="lg"><div class="lgh">what it has learned</div>'
+         +lg.map(e=>'<div class="lge"><span>'+esc(e.d||'')+'</span>'+esc(e.t||'')+'</div>').join('')+'</div>':'')
+      +'<div style="font-size:12px;margin-top:8px">Say in chat: <b>'+esc(t.cmd)+'</b></div>'
+      +'</div>';
+  }).join('');
 }
 
 /* ---------- Line: the chain, desk by desk ----------
