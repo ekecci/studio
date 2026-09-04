@@ -31,6 +31,20 @@
   .row .m{color:var(--muted);font-size:11px;}
   .empty{color:var(--muted);font-style:italic;font-size:13px;padding:8px 0;}
   a{color:var(--ink);}
+  .ln{background:var(--card);border:1px solid var(--line);padding:14px;margin-bottom:12px;}
+  .ln h3{font-family:Georgia,serif;font-weight:400;font-size:16px;margin:4px 0 10px;}
+  .stp{display:flex;gap:10px;padding:7px 0;border-bottom:1px dotted var(--line);align-items:flex-start;}
+  .stp:last-child{border-bottom:none;}
+  .dot{width:9px;height:9px;border-radius:50%;margin-top:5px;flex:0 0 9px;border:1px solid var(--ink);}
+  .dot.done{background:var(--ink);} .dot.now{background:var(--need);border-color:var(--need);}
+  .dot.gap{background:transparent;border-color:var(--need);border-style:dashed;}
+  .dot.todo{background:transparent;border-color:var(--muted);}
+  .stp .who{font-size:12px;font-weight:600;flex:0 0 62px;}
+  .stp .wh{flex:1;font-size:12px;}
+  .stp .wh .f{color:var(--muted);font-size:11px;word-break:break-all;}
+  .stp.gap .wh b{color:var(--need);}
+  .holder{font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-top:10px;}
+  .holder b{color:var(--ink);}
   .dr{background:var(--card);border:1px solid var(--line);padding:14px;margin-bottom:12px;}
   .dr h3{font-family:Georgia,serif;font-weight:400;font-size:16px;margin:4px 0 2px;}
   .dr .fl{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin:12px 0 4px;}
@@ -77,7 +91,8 @@
 <div class="sub" id="meta">&mdash;</div>
 <nav>
   <button data-t="needs" class="on">Needs you</button>
-  <button data-t="today">Today</button>
+  <button data-t="line">Line</button>
+<button data-t="today">Today</button>
   <button data-t="compose">Compose</button>
 <button data-t="send">Send</button>
   <button data-t="archive">Archive</button>
@@ -85,6 +100,7 @@
   <button data-t="links">Links</button>
 </nav>
 <section id="t-needs" class="on"><div class="empty">Loading&hellip;</div></section>
+<section id="t-line"></section>
 <section id="t-today"><div class="empty">Loading&hellip;</div></section>
 <section id="t-compose"></section>
 <section id="t-send">
@@ -161,6 +177,7 @@ function render(D){
     : '<div class="empty">Archive is empty — drop content into intake and run the daily update.</div>';
   renderNeeds(D);
   renderCompose(D);
+  renderLine(D);
   document.getElementById('t-team').innerHTML=TEAM.map(a=>'<div class="card"><span class="tag '+a.brand+'">'+(a.brand==='TMI'?'The Modern Issue':'The Issue')+'</span><h3>'+esc(a.name)+'</h3><div style="font-size:13px;color:var(--muted)">'+esc(a.role)+'</div><div style="font-size:12px;margin-top:6px">Text in Claude app: <b>'+esc(a.cmd)+'</b></div></div>').join('');
 }
 async function loadData(fresh){
@@ -230,6 +247,37 @@ async function sendToStudio(){
     st.textContent='✓ Sent to '+agent+'. Say \'run the next step\' in Claude to have it picked up now.';
     document.getElementById('sNote').value=''; document.getElementById('sFiles').value='';
   }catch(e){ st.textContent='Send failed — check connection and try again.'; }
+}
+
+/* ---------- Line: the chain, desk by desk ----------
+   A handoff is a file appearing on a desk. This draws that: which desk delivered what,
+   in stage order, where the work is now, and where a desk was skipped. Data is D.line[]. */
+function renderLine(D){
+  const items=(D.line||[]);
+  let h='<div class="card"><h3>The line</h3><div class="d">one stage at a time · gate after each</div>'
+    +'<div style="font-size:12.5px;color:var(--muted);margin-top:8px">Agents never meet. Each one writes to its own desk and stops. '
+    +'The next one reads that desk later. A dashed ring is a desk that was skipped.</div></div>';
+  if(!items.length){
+    h+='<div class="empty">Nothing on the line yet.</div>';
+    document.getElementById('t-line').innerHTML=h; return;
+  }
+  items.forEach(it=>{
+    const L=LINES[it.brand]||LINES.TMI;
+    h+='<div class="ln"><span class="tag '+esc(it.brand)+'">'+esc(L.label)+'</span>'
+      +'<h3>'+esc(it.title||'')+'</h3>';
+    (it.desks||[]).forEach(d=>{
+      const s=d.status||'todo';
+      h+='<div class="stp'+(s==='gap'?' gap':'')+'">'
+        +'<div class="dot '+esc(s)+'"></div>'
+        +'<div class="who">'+esc(d.agent||'')+'</div>'
+        +'<div class="wh"><b>'+esc(d.name||'')+'</b>'
+        +(d.note?' — '+esc(d.note):'')
+        +(d.file?'<div class="f">'+esc(d.file)+'</div>':'')
+        +'</div></div>';
+    });
+    h+='<div class="holder">now with <b>'+esc(it.holder||'—')+'</b></div></div>';
+  });
+  document.getElementById('t-line').innerHTML=h;
 }
 
 /* ---------- Compose: read the draft copy, edit it, send the verdict back ----------
