@@ -31,6 +31,16 @@
   .row .m{color:var(--muted);font-size:11px;}
   .empty{color:var(--muted);font-style:italic;font-size:13px;padding:8px 0;}
   a{color:var(--ink);}
+  .dr{background:var(--card);border:1px solid var(--line);padding:14px;margin-bottom:12px;}
+  .dr h3{font-family:Georgia,serif;font-weight:400;font-size:16px;margin:4px 0 2px;}
+  .dr .fl{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin:12px 0 4px;}
+  .dr textarea{width:100%;border:1px solid var(--line);background:var(--paper);padding:9px;font:13px/1.5 "Helvetica Neue",Arial,sans-serif;color:var(--ink);resize:vertical;}
+  .dr textarea.short{height:44px;} .dr textarea.mid{height:96px;} .dr textarea.long{height:190px;}
+  .dr .warn{border-left:3px solid var(--need);padding:7px 10px;margin:10px 0;font-size:12px;background:#fdf6f4;}
+  .dr .acts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
+  .dr .acts button{border:1px solid var(--ink);background:var(--card);color:var(--ink);padding:10px 16px;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;}
+  .dr .acts button.go{background:var(--ink);color:var(--paper);}
+  .dr .ct{font-size:11px;color:var(--muted);margin-top:3px;}
   .hint{border:1px dashed var(--muted);padding:12px;font-size:12px;color:var(--muted);margin-top:14px;}
   .hint b{color:var(--ink);}
   #gate{position:fixed;inset:0;background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:30px;z-index:10;}
@@ -68,13 +78,15 @@
 <nav>
   <button data-t="needs" class="on">Needs you</button>
   <button data-t="today">Today</button>
-  <button data-t="send">Send</button>
+  <button data-t="compose">Compose</button>
+<button data-t="send">Send</button>
   <button data-t="archive">Archive</button>
   <button data-t="team">Team</button>
   <button data-t="links">Links</button>
 </nav>
 <section id="t-needs" class="on"><div class="empty">Loading&hellip;</div></section>
 <section id="t-today"><div class="empty">Loading&hellip;</div></section>
+<section id="t-compose"></section>
 <section id="t-send">
   <div class="card">
     <h3>Send work to the studio</h3>
@@ -148,6 +160,7 @@ function render(D){
     ? arch.slice().reverse().map(e=>'<div class="row"><span class="tag '+esc(e.brand||'TMI')+'">'+esc(e.brand||'')+'</span> <b>'+esc(e.title||'')+'</b><div class="m">'+esc(e.date||'')+' · '+esc(e.pillar||'')+' · '+esc((e.tags||[]).join(', '))+' · '+esc(e.status||'')+'</div></div>').join('')
     : '<div class="empty">Archive is empty — drop content into intake and run the daily update.</div>';
   renderNeeds(D);
+  renderCompose(D);
   document.getElementById('t-team').innerHTML=TEAM.map(a=>'<div class="card"><span class="tag '+a.brand+'">'+(a.brand==='TMI'?'The Modern Issue':'The Issue')+'</span><h3>'+esc(a.name)+'</h3><div style="font-size:13px;color:var(--muted)">'+esc(a.role)+'</div><div style="font-size:12px;margin-top:6px">Text in Claude app: <b>'+esc(a.cmd)+'</b></div></div>').join('');
 }
 async function loadData(fresh){
@@ -157,6 +170,7 @@ async function loadData(fresh){
     const r=await fetch('data.enc?t='+(fresh?Date.now():'0'),{cache:fresh?'reload':'default'});
     const b64=await r.text();
     const D=await decryptPayload(b64,pass);
+    DATA=D;
     render(D);
     document.getElementById('gate').style.display='none';
     return true;
@@ -173,6 +187,7 @@ async function unlock(){
 document.getElementById('pass').addEventListener('keydown',e=>{ if(e.key==='Enter') unlock(); });
 if(localStorage.getItem('studio-key')) loadData(true);
 
+var DATA={};
 function b64bytes(u8){let s='';const CH=0x8000;for(let i=0;i<u8.length;i+=CH){s+=String.fromCharCode.apply(null,u8.subarray(i,i+CH));}return btoa(s);}
 async function encBytes(bytes,pass){
   const salt=crypto.getRandomValues(new Uint8Array(16)), iv=crypto.getRandomValues(new Uint8Array(12));
@@ -212,14 +227,83 @@ async function sendToStudio(){
       const safe=files[i].name.replace(/[^a-zA-Z0-9._-]/g,'_');
       await putRepoFile('inbox/'+ts+'-'+i+'-'+safe+'.enc',b64bytes(enc));
     }
-    st.textContent='✓ Sent to '+agent+' — will be processed on the next studio run.';
+    st.textContent='✓ Sent to '+agent+'. Say \'run the next step\' in Claude to have it picked up now.';
     document.getElementById('sNote').value=''; document.getElementById('sFiles').value='';
   }catch(e){ st.textContent='Send failed — check connection and try again.'; }
 }
 
+/* ---------- Compose: read the draft copy, edit it, send the verdict back ----------
+   Drafts ride in data.enc as D.drafts[]. Each has {id, brand, title, stage, fields:[{k,label,size,v}],
+   flags:[]}. Editing here does not change any work file directly — it writes an edit request into
+   inbox/, and the next run applies it and files a new dated revision. The work files stay immutable. */
+function renderCompose(D){
+  const drafts=(D.drafts||[]);
+  let h='<div class="card"><h3>Compose</h3><div class="d">the copy as it will be set</div>'
+    +'<div style="font-size:12.5px;color:var(--muted);margin-top:8px">Edit anything below and send it back. '
+    +'Nothing here posts. Your edit becomes a dated revision on the next run — the original file is never overwritten.</div></div>';
+  if(!drafts.length){
+    h+='<div class="empty">No copy drafted yet. Queue a Curate stage and it will appear here.</div>';
+    document.getElementById('t-compose').innerHTML=h; return;
+  }
+  drafts.forEach((d,n)=>{
+    const L=LINES[d.brand]||LINES.TMI;
+    h+='<div class="dr" data-i="'+n+'">'
+      +'<span class="tag '+esc(d.brand)+'">'+esc(L.label)+'</span>'
+      +'<h3>'+esc(d.title||'')+'</h3>'
+      +'<div class="d">at '+esc(L.stages[d.stage]||'')+'</div>';
+    (d.flags||[]).forEach(f=>{ h+='<div class="warn">'+esc(f)+'</div>'; });
+    (d.fields||[]).forEach(f=>{
+      const cls=f.size==='long'?'long':(f.size==='mid'?'mid':'short');
+      h+='<div class="fl">'+esc(f.label||f.k)+'</div>'
+        +'<textarea class="'+cls+'" data-k="'+esc(f.k)+'" oninput="cCount(this)">'+esc(f.v||'')+'</textarea>'
+        +'<div class="ct">'+((f.v||'').trim()?(f.v.trim().split(/\s+/).length+' words'):'empty')+'</div>';
+    });
+    h+='<div class="fl">Note back to the studio</div>'
+      +'<textarea class="mid" data-k="__note" placeholder="What to change, and why. Left empty on approve means ship it as written."></textarea>'
+      +'<div class="acts">'
+      +'<button class="go" onclick="sendEdit('+n+',\'approve\')">Approve</button>'
+      +'<button onclick="sendEdit('+n+',\'revise\')">Send back to revise</button>'
+      +'</div><div id="eStatus'+n+'" class="empty" style="min-height:18px"></div></div>';
+  });
+  document.getElementById('t-compose').innerHTML=h;
+}
+function cCount(el){
+  const t=el.value.trim();
+  el.nextElementSibling.textContent=t?(t.split(/\s+/).length+' words'):'empty';
+}
+async function sendEdit(n,verdict){
+  const st=document.getElementById('eStatus'+n);
+  const pass=localStorage.getItem('studio-key');
+  if(!GHTOKEN||!pass){ st.textContent='Not connected — pull to refresh first.'; return; }
+  const d=(DATA.drafts||[])[n]; if(!d){ st.textContent='Draft not loaded.'; return; }
+  const card=document.querySelector('.dr[data-i="'+n+'"]');
+  const fields={}; let changed=[];
+  card.querySelectorAll('textarea[data-k]').forEach(t=>{
+    const k=t.dataset.k; if(k==='__note') return;
+    fields[k]=t.value;
+    const was=((d.fields||[]).find(f=>f.k===k)||{}).v||'';
+    if(t.value!==was) changed.push(k);
+  });
+  const note=(card.querySelector('textarea[data-k="__note"]')||{}).value||'';
+  if(verdict==='revise' && !note.trim() && !changed.length){
+    st.textContent='Say what to change, or edit a field first.'; return;
+  }
+  try{
+    st.textContent='Encrypting & sending…';
+    const req={type:'edit',itemId:d.id,brand:d.brand,verdict:verdict,
+               fields:fields,changed:changed,note:note.trim(),
+               date:new Date().toISOString().slice(0,10)};
+    const enc=await encBytes(new TextEncoder().encode(JSON.stringify(req)),pass);
+    await putRepoFile('inbox/'+Date.now()+'-edit.enc',b64bytes(enc));
+    st.textContent=(verdict==='approve'?'✓ Approved':'✓ Sent back')
+      +(changed.length?' with '+changed.length+' field'+(changed.length>1?'s':'')+' edited':'')
+      +'. Say \'run the next step\' in Claude to apply it.';
+  }catch(e){ st.textContent='Could not send — check connection.'; }
+}
+
 /* ---------- Needs you: the gates, and the buttons that move them ---------- */
 const LINES={
-  TMI:{label:'The Modern Issue',stages:['Source','Curate','Document','Publish-prep','You post']},
+  TMI:{label:'The Modern Issue',stages:['Find','Curate','Document','Media','Check','You post']},
   ISSUE:{label:'The Issue',stages:['Find & intake','Research & model','Document','Shop & story','You list & post']}
 };
 function renderNeeds(D){
@@ -267,7 +351,7 @@ async function queueStage(office,action){
     const req={type:'request',office:office,action:action,date:new Date().toISOString().slice(0,10)};
     const enc=await encBytes(new TextEncoder().encode(JSON.stringify(req)),pass);
     await putRepoFile('inbox/'+Date.now()+'-request.enc',b64bytes(enc));
-    st.textContent='✓ Queued — runs on the next studio update (Mon/Wed/Fri 17:00), or say "run the daily update" in Claude.';
+    st.textContent='✓ Queued. Now say \'run the next step\' in Claude and it runs this stage first.';
   }catch(e){ st.textContent='Could not queue — check connection.'; }
 }
 
