@@ -161,7 +161,7 @@
     </div>
     <div class="card" id="mood"></div>
     <div class="card flat">
-      <div class="h">Schedule <span class="lbl" id="prog"></span></div>
+      <div class="h"><span>Schedule <span class="lbl" id="prog" style="margin-left:6px"></span></span><span class="row" style="gap:16px"><button class="link" id="resetToday">Reset day</button><button class="link" id="editToday">Edit</button></span></div>
       <div class="tl" id="tasks"></div>
       <div class="row" style="margin-top:14px"><button class="pill" id="badDay">Bad day → minimum</button></div>
     </div>
@@ -342,6 +342,7 @@ function rulePlan(base,energy,moods,prios,from){
   const T=base.map(b=>b.slice());const fixed=[],mov=[],later=[];
   T.forEach(b=>{
     if(b[1]<=from){fixed.push(b);return}            // past blocks stay
+    if(b[0]<from&&!isFixed(b)){b[0]=from}            // in progress: only the rest of it is left
     let d=b[1]-b[0];const pr=b[4]&&prios.includes(b[4]);
     if(b[4]){
       if(has('sick')&&!pr){later.push(b[2]);return}
@@ -365,11 +366,18 @@ function rulePlan(base,energy,moods,prios,from){
     if((has('stressed')||has('overwhelmed')||has('anxious'))&&!a._p)return (a[1]-a[0])-(b[1]-b[0]);
     return a._i-b._i});
   if(has('overwhelmed')){let n=0;for(let i=mov.length-1;i>=0;i--){} const work=mov.filter(b=>b[4]);work.slice(3).forEach(b=>{later.push(b[2]);mov.splice(mov.indexOf(b),1)})}
-  const busy=fixed.map(b=>[b[0],b[1]]);const START=Math.max(8,r5(from)),END=23;
-  const place=d=>{let t=START;for(const [s,e] of busy.slice().sort((a,b)=>a[0]-b[0])){if(e<=t)continue;if(s-t>=d-1e-6)return t;t=Math.max(t,e)}return t+d<=END+1e-6?t:null};
+  const busy=fixed.map(b=>[b[0],b[1]]);const START=Math.max(8,r5(from)),END0=23;
   const placed=[];
-  const gapAt=min=>{let t=START;for(const [s,e] of busy.slice().sort((a,b)=>a[0]-b[0])){if(e<=t)continue;if(s-t>=min)return[t,s-t];t=Math.max(t,e)}return null};
-  mov.forEach(b=>{let d=b[1]-b[0];let t=place(d);if(b._p){const g=gapAt(.75);if(g&&(t===null||g[0]<t)&&g[1]<d){t=g[0];d=r5(g[1])}}if(t===null){later.push(b[2]);return}b[0]=r5(t);b[1]=r5(t+d);busy.push([b[0],b[1]]);placed.push(b)});
+  const gaps=(end)=>{const END=end||END0;const occ=busy.slice().sort((a,b)=>a[0]-b[0]);const out=[];let t=START;for(const [s,e] of occ){if(e<=t)continue;if(s>t&&t<END)out.push([t,Math.min(s,END)]);t=Math.max(t,e)}if(END>t)out.push([t,END]);return out.filter(g=>g[1]-g[0]>1e-6)};
+  mov.forEach(b=>{
+    let need=r5(b[1]-b[0]);const parts=[];const lim=b[4]&&!['Bass','Gym','Investing'].includes(b[4])?21:23;
+    const whole=gaps(lim).find(([s,e])=>e-s>=need-1e-6),first=gaps(lim).find(([s,e])=>e-s>=Math.min(.5,need)-1e-6);
+    if(whole&&first&&whole[0]-first[0]<=.5){parts.push([whole[0],whole[0]+need]);busy.push(parts[0]);need=0}   // fits in one piece without leaving a gap
+    for(const [s,e] of gaps(lim)){if(need<=1e-6||parts.length>=3)break;const len=e-s;if(len<Math.min(.5,need)-1e-6)continue;const take=Math.min(len,need);parts.push([s,s+take]);busy.push([s,s+take]);need-=take}
+    if(!parts.length){later.push(b[2]);return}
+    parts.sort((x,y)=>x[0]-y[0]).forEach((pt,k)=>{const c=b.slice();c[0]=r5(pt[0]);c[1]=r5(pt[1]);if(parts.length>1)c[2]=b[2]+' · part '+(k+1)+'/'+parts.length;placed.push(c)});
+    if(need>.25)later.push(b[2]+' ('+dur(need)+' left)');
+  });
   const tips=[];
   if(low)tips.push('Low-energy day: everything is shorter. The short version counts as done.');
   if(high)tips.push('Good energy: your priority got an extra 30 minutes.');
@@ -413,7 +421,7 @@ function renderMood(){
   const add='<button class="pill" id="spont">+ Something came up</button>';
   if(!p){box.innerHTML=`<div class="moodcard"><div><div class="h" style="margin:0">How are you today?</div><div class="note">20 seconds. Your day gets planned around it.</div></div><button class="pill dark" id="ciOpen">Check in</button></div><div class="row" style="margin-top:12px">${add}</div>`}
   else{const tags=[['Energy '+p.energy]].concat((p.moods||[]).map(x=>[(MOODS.find(y=>y[0]===x)||[0,x])[1]])).concat(p.prios.map(x=>['★ '+x]));
-    box.innerHTML=`<div class="moodcard"><div class="h" style="margin:0">Your day${p.source==='ai'?' <span class="lbl">· planned by Claude</span>':''}</div><span class="row" style="gap:14px"><button class="link" id="resetDay">Undo</button><button class="link" id="ciOpen">Reschedule</button></span></div>
+    box.innerHTML=`<div class="moodcard"><div class="h" style="margin:0">Your day${p.source==='ai'?' <span class="lbl">· planned by Claude</span>':''}</div><button class="link" id="ciOpen">Reschedule</button></div>
       <div class="tags">${tags.map(x=>`<span class="tag">${esc(x[0])}</span>`).join('')}</div>
       ${p.tip?`<div class="tip">${esc(p.tip)}</div>`:''}${p.later&&p.later.length?`<div class="later">If there's time: ${esc(p.later.join(', '))}</div>`:''}
       <div class="row" style="margin-top:14px">${add}</div>`}
@@ -436,13 +444,13 @@ function renderCheckin(){
   $('ciClose').onclick=closeSheet;
   $('planGo').onclick=()=>{ci.note=$('ciNote').value.trim();const ex=p&&p.extras||[];runPlan(withExtras(ex),ci.note,ex)};
 }
-function withExtras(ex){const s=W(todayIdx).map(b=>b.slice());ex.forEach(x=>{s.forEach(b=>{if(b[1]>x[0]&&b[0]<x[1]){b[8]=isFixed(b);b[7]=false}});s.push(x.slice())});return s.sort((a,b)=>a[0]-b[0])}
+function withExtras(ex){const p=plan();const s=((p&&p.base)||W(todayIdx)).map(b=>b.slice());ex.forEach(x=>{s.forEach(b=>{if(b[1]>x[0]&&b[0]<x[1]){b[8]=isFixed(b);b[7]=false}});s.push(x.slice())});return s.sort((a,b)=>a[0]-b[0])}
 async function runPlan(base,note,extras){
   const energy=ci.energy||'ok',from=nowH();let r=null;working=true;if($('sheet').classList.contains('on')&&$('planGo')){$('planGo').disabled=true;$('planGo').textContent='Planning…'}
   try{r=await aiPlan(base,energy,ci.moods,ci.prios,note,from)}catch(e){toast('Claude could not plan right now ('+e.message+'). Used the built-in planner.',5000)}
   if(!r)r=rulePlan(base,energy,ci.moods,ci.prios,from);
   working=false;closeSheet();
-  state.plans[todayKey]=Object.assign({energy,moods:ci.moods.slice(),prios:ci.prios.slice(),note,extras:extras||[]},r);
+  const prevBase=plan()&&plan().base;state.plans[todayKey]=Object.assign({energy,moods:ci.moods.slice(),prios:ci.prios.slice(),note,extras:extras||[]},prevBase?{base:prevBase}:{},r);
   save();renderAll();scheduleReminders();toast('Day planned. Tap the calendar icon for alarms.');
 }
 /* spontaneous plans: insert a fixed block and rebuild the rest of the day around it */
@@ -549,8 +557,11 @@ function gapEl(s,e,tap){const el=document.createElement('div');el.className='ln 
 function fillList(box,dow,list,tapGaps){let prev=null;if(tapGaps)shownSug=new Set();const h=nowH();
   list.forEach(b=>{if(prev!==null&&b[0]-prev>=.25-1e-6){const s=prev,e=b[0];if(!(tapGaps&&e<=h))box.appendChild(gapEl(s,e,tapGaps&&e>h))}
     box.appendChild(lineEl(dow,b,dow===todayIdx));prev=Math.max(prev||0,b[1])})}
+let editingToday=false;
 function renderToday(){
-  const box=$('tasks');box.innerHTML='';const list=blocksFor(todayIdx);let n=0,c=0;
+  const box=$('tasks');box.innerHTML='';
+  $('editToday').textContent=editingToday?'Done':'Edit';$('resetToday').style.display=plan()?'':'none';
+  if(editingToday){editorInto(box,()=>blocksFor(todayIdx),putToday,false);$('prog').textContent='';return}const list=blocksFor(todayIdx);let n=0,c=0;
   list.forEach(b=>{if(b[4]){n++;if(isDone(todayIdx,b[2]))c++}});fillList(box,todayIdx,list,true);
   $('prog').textContent=n?c+' / '+n+' done':'';
 }
@@ -566,21 +577,29 @@ function renderWeek(){
   $('editDay').textContent=editing?'Done':'Edit';
   const L=$('dayList');L.innerHTML='';
   if(!editing){fillList(L,sel,blocksFor(sel),sel===todayIdx);return}
-  const list=W(sel).map(b=>b.slice());
+  editorInto(L,()=>W(sel),setList,true);
+}
+function editorInto(L,get,put,week){
+  const list=get().map(b=>b.slice());
   list.forEach((b,i)=>{const r=document.createElement('div');r.className='ed';
     r.innerHTML=`<input type="time" class="t0"><input type="time" class="t1"><button class="x">×</button><input class="nm" placeholder="Block name"><input class="st" placeholder="First tiny step"><select class="gl"><option value="">No goal</option>${GOALS.map(g=>`<option>${g}</option>`).join('')}</select><select class="fx"><option value="0">Flexible — planner may move it</option><option value="1">Fixed time</option></select>`;
     const q=c=>r.querySelector(c);q('.t0').value=fmt(b[0]);q('.t1').value=fmt(b[1]);q('.nm').value=b[2];q('.st').value=b[3]||'';q('.gl').value=b[4]||'';q('.fx').value=isFixed(b)?'1':'0';
-    const upd=()=>{const l=W(sel).map(x=>x.slice());const nb=l[i];nb[0]=toH(q('.t0').value);nb[1]=Math.max(toH(q('.t1').value),nb[0]+1/12);nb[2]=q('.nm').value.trim()||'Untitled';nb[3]=q('.st').value.trim();nb[4]=q('.gl').value||null;nb[5]=nb[5]||'away';nb[7]=q('.fx').value==='1';setList(l)};
+    const upd=()=>{const l=get().map(x=>x.slice());const nb=l[i];nb[0]=toH(q('.t0').value);nb[1]=Math.max(toH(q('.t1').value),nb[0]+1/12);nb[2]=q('.nm').value.trim()||'Untitled';nb[3]=q('.st').value.trim();nb[4]=q('.gl').value||null;nb[5]=nb[5]||'away';nb[7]=q('.fx').value==='1';put(l)};
     ['.t0','.t1','.nm','.st','.gl','.fx'].forEach(c=>q(c).addEventListener('change',upd));
-    q('.x').onclick=()=>{const l=W(sel).map(x=>x.slice());l.splice(i,1);setList(l)};L.appendChild(r)});
+    q('.x').onclick=()=>{const l=get().map(x=>x.slice());l.splice(i,1);put(l)};L.appendChild(r)});
   const bar=document.createElement('div');bar.className='row';bar.style.marginTop='14px';
-  bar.innerHTML='<button class="pill" id="addB">+ Add block</button><button class="pill" id="copyB">Copy to…</button><button class="pill" id="resetB">Reset</button>';L.appendChild(bar);
-  $('addB').onclick=()=>{const l=W(sel).map(x=>x.slice());const last=l.length?l[l.length-1][1]:9;const s0=last>=22?9:last;l.push([s0,Math.min(s0+1,23.5),'New block','',null,'away',null,false]);setList(l)};
-  $('resetB').onclick=()=>{delete state.blocks[sel];save();renderAll()};
-  $('copyB').onclick=e=>{const w=document.createElement('div');w.className='row';w.style.marginTop='10px';
-    ORDER.filter(i=>i!==sel).forEach(i=>{const b=document.createElement('button');b.className='chip';b.textContent=DN[i].slice(0,3);b.onclick=()=>{state.blocks[i]=W(sel).map(x=>x.slice());save();b.classList.add('on')};w.appendChild(b)});
-    bar.after(w);e.target.disabled=true};
+  bar.innerHTML='<button class="pill" data-a="add">+ Add block</button>'+(week?'<button class="pill" data-a="copy">Copy to…</button><button class="pill" data-a="reset">Reset</button>':'');L.appendChild(bar);
+  bar.querySelector('[data-a=add]').onclick=()=>{const l=get().map(x=>x.slice());const h=nowH();const last=l.length?l[l.length-1][1]:9;let s0=week?(last>=22?9:last):Math.max(r5(Math.ceil(h*4)/4),Math.min(last,22.5));l.push([s0,Math.min(s0+1,23.5),'New block','',null,'away',null,!week]);put(l)};
+  if(week){bar.querySelector('[data-a=reset]').onclick=()=>{delete state.blocks[sel];save();renderAll()};
+    bar.querySelector('[data-a=copy]').onclick=e=>{const w=document.createElement('div');w.className='row';w.style.marginTop='10px';
+      ORDER.filter(i=>i!==sel).forEach(i=>{const b=document.createElement('button');b.className='chip';b.textContent=DN[i].slice(0,3);b.onclick=()=>{state.blocks[i]=W(sel).map(x=>x.slice());save();b.classList.add('on')};w.appendChild(b)});
+      bar.after(w);e.target.disabled=true}}
 }
+function putToday(l){l.sort((a,b)=>a[0]-b[0]);let p=plan();
+  if(!p)p=state.plans[todayKey]={energy:'ok',moods:[],prios:[],note:'',extras:[],later:[],tip:'',source:'manual'};
+  p.blocks=l;p.base=l.map(b=>b.slice());p.extras=[];save();renderAll();scheduleReminders()}
+$('editToday').onclick=()=>{editingToday=!editingToday;renderToday()};
+$('resetToday').onclick=()=>{delete state.plans[todayKey];editingToday=false;save();renderAll();scheduleReminders();toast('Today is back to your usual day.')};
 function setList(l){l.sort((a,b)=>a[0]-b[0]);state.blocks[sel]=l;save();renderAll();if(sel===todayIdx&&plan())toast('Saved. Tap Reschedule on Today to apply it to today.')}
 $('editDay').onclick=()=>{editing=!editing;renderWeek()};
 
