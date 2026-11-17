@@ -97,6 +97,10 @@
   .ln.past:not(.d) .body{opacity:.6}
   .ln .g{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--mid);margin-bottom:3px}
 
+  .ln.gap{min-height:0;cursor:default}
+  .ln.gap .tm{padding-top:8px}.ln.gap .tm b{font-weight:400;color:var(--mid);font-size:12.5px}
+  .ln.gap .body{background:transparent;border:1px dashed var(--rule);padding:8px 14px;color:var(--mid);font-size:13px;display:flex;justify-content:space-between;gap:8px}
+  .ln.gap.tap{cursor:pointer}.ln.gap.tap:hover .body{color:var(--ink)}
   /* week */
   .drow{background:var(--card);border-radius:0;display:flex;gap:14px;padding:14px 16px;margin-bottom:8px;cursor:pointer}
   .drow .L{width:34px;flex:none;text-align:center}
@@ -244,27 +248,31 @@
 const PH={away:'Phone — another room',lap:'Phone away — laptop only',free:'Phone — allowed',none:'Phone — charging outside the bedroom'};
 // [start, end, name, first tiny step, goal, phone, minimum version, fixed?]
 const DEF={
-1:[[7.5,8.5,'Gym','Put your gym clothes on. That\'s it.','Gym','away','10-minute walk'],
+1:[[18,19,'Dinner, no phone','Cook something simple.',null,'away',null],
+   [7.5,8.5,'Gym','Put your gym clothes on. That\'s it.','Gym','away','10-minute walk'],
    [9,12,'Job applications','Open the job list and pick ONE posting.','Job search','away','Send 1 application'],
    [12,13,'Lunch + walk, no phone','Shoes on, out the door.',null,'away','Eat away from the screen'],
    [13,17,'Dutch, 4 × 45 min','Open the lesson; read the first line out loud.','Dutch','away','15 minutes on Anki'],
    [19,19.75,'Jewelry brand, 45 min','Take 3 photos of one piece.','Jewelry','lap','Skip it, that\'s fine'],
    [21,21.5,'Phone time, on purpose','Enjoy it, timer on.',null,'free',null],
    [22.5,23,'Bass or wind down','Pick up the bass.','Bass','none',null]],
-2:[[9,12,'Job applications','Open the job list and pick ONE posting.','Job search','away','Send 1 application'],
+2:[[19,20,'Dinner, no phone','Cook something simple.',null,'away',null],
+   [9,12,'Job applications','Open the job list and pick ONE posting.','Job search','away','Send 1 application'],
    [12,13,'Lunch + walk, no phone','Shoes on, out the door.',null,'away','Eat away from the screen'],
    [13,17,'Dutch, 4 × 45 min','Open the lesson; read the first line out loud.','Dutch','away','15 minutes on Anki'],
    [17.5,19,'The Modern Issue, 1 post','Open the template and paste the topic.','The Modern Issue','away','Write just the caption'],
    [21,21.5,'Phone time, on purpose','Enjoy it, timer on.',null,'free',null],
    [22.5,23,'Bass or wind down','Pick up the bass.','Bass','none',null]],
-3:[[7.5,8.5,'Gym','Put your gym clothes on. That\'s it.','Gym','away','10-minute walk'],
+3:[[18,19,'Dinner, no phone','Cook something simple.',null,'away',null],
+   [7.5,8.5,'Gym','Put your gym clothes on. That\'s it.','Gym','away','10-minute walk'],
    [9,12,'Job applications','Open the job list and pick ONE posting.','Job search','away','Send 1 application'],
    [12,13,'Lunch + walk, no phone','Shoes on, out the door.',null,'away','Eat away from the screen'],
    [13,17,'Dutch, 4 × 45 min','Open the lesson; read the first line out loud.','Dutch','away','15 minutes on Anki'],
    [19,19.75,'Jewelry brand, 45 min','Schedule 1 post on the laptop.','Jewelry','lap','Skip it, that\'s fine'],
    [21,21.5,'Phone time, on purpose','Enjoy it, timer on.',null,'free',null],
    [22.5,23,'Bass or wind down','Pick up the bass.','Bass','none',null]],
-4:[[9,13,'Dutch, 4 × 45 min','Open the lesson; read the first line out loud.','Dutch','away','15 minutes on Anki'],
+4:[[18.5,19.5,'Dinner, no phone','Cook something simple.',null,'away',null],
+   [9,13,'Dutch, 4 × 45 min','Open the lesson; read the first line out loud.','Dutch','away','15 minutes on Anki'],
    [13,14,'Lunch + walk, no phone','Shoes on, out the door.',null,'away','Eat away from the screen'],
    [14,16.5,'Revit — portfolio project','Open the file and model ONE wall.','Revit + rendering','away','Watch 1 tutorial'],
    [17,18.5,'Rendering','Set up 1 camera view.','Revit + rendering','away','Render 1 test image'],
@@ -282,6 +290,7 @@ const DEF={
    [16,16.5,'Bass','Pick up the bass.','Bass','away',null]]
 };
 
+Object.values(DEF).forEach(l=>l.sort((a,b)=>a[0]-b[0]));
 const GOALS=['Job search','Portfolio','Dutch','Revit + rendering','The Modern Issue','Jewelry','Gym','Investing','Bass'];
 const ORDER=[1,2,3,4,5,6,0],LET={1:'M',2:'T',3:'W',4:'T',5:'F',6:'S',0:'S'},DN=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MENU=['Drink a full glass of water','10 squats','Step outside for 2 minutes','Bass for 5 minutes','5 Dutch words, out loud','Tidy one surface','Make tea','Stretch neck and shoulders','Look out the window','Write one line: what am I avoiding?'];
@@ -399,12 +408,13 @@ function renderMood(){
   const add='<button class="pill" id="spont">+ Something came up</button>';
   if(!p){box.innerHTML=`<div class="moodcard"><div><div class="h" style="margin:0">How are you today?</div><div class="note">20 seconds. Your day gets planned around it.</div></div><button class="pill dark" id="ciOpen">Check in</button></div><div class="row" style="margin-top:12px">${add}</div>`}
   else{const tags=[['Energy '+p.energy]].concat((p.moods||[]).map(x=>[(MOODS.find(y=>y[0]===x)||[0,x])[1]])).concat(p.prios.map(x=>['★ '+x]));
-    box.innerHTML=`<div class="moodcard"><div class="h" style="margin:0">Your day${p.source==='ai'?' <span class="lbl">· planned by Claude</span>':''}</div><button class="link" id="ciOpen">Reschedule</button></div>
+    box.innerHTML=`<div class="moodcard"><div class="h" style="margin:0">Your day${p.source==='ai'?' <span class="lbl">· planned by Claude</span>':''}</div><span class="row" style="gap:14px"><button class="link" id="resetDay">Undo</button><button class="link" id="ciOpen">Reschedule</button></span></div>
       <div class="tags">${tags.map(x=>`<span class="tag">${esc(x[0])}</span>`).join('')}</div>
       ${p.tip?`<div class="tip">${esc(p.tip)}</div>`:''}${p.later&&p.later.length?`<div class="later">If there's time: ${esc(p.later.join(', '))}</div>`:''}
       <div class="row" style="margin-top:14px">${add}</div>`}
   $('ciOpen').onclick=()=>{ci=p?{energy:p.energy,moods:(p.moods||[]).slice(),prios:p.prios.slice(),note:p.note||''}:{energy:null,moods:[],prios:[],note:''};renderCheckin()};
   $('spont').onclick=renderSpont;
+  if($('resetDay'))$('resetDay').onclick=()=>{delete state.plans[todayKey];save();renderAll();scheduleReminders();toast('Back to your usual day.')};
 }
 function renderCheckin(){
   const p=plan(),ai=!!getKey();
@@ -478,9 +488,16 @@ function renderStrip(){
     b.innerHTML=`<span>${DN[i].slice(0,2)}</span><b>${d.getDate()}</b><i class="dot"></i>`;
     b.onclick=()=>{if(i===todayIdx)return;sel=i;editing=false;renderWeek();show('week');setTimeout(()=>$('dayTitle').scrollIntoView({block:'center'}),50)};S.appendChild(b)});
 }
+const dur=h=>{const m=Math.round(h*60);return m>=60?Math.floor(m/60)+' h'+(m%60?' '+(m%60)+' min':''):m+' min'};
+function gapEl(s,e,tap){const el=document.createElement('div');el.className='ln gap'+(tap?' tap':'');
+  el.innerHTML=`<div class="tm"><b>${fmt(s)}</b></div><div class="rail"></div><div class="body"><span>Free time · ${dur(e-s)}</span>${tap?'<span>+ add</span>':''}</div>`;
+  if(tap)el.onclick=()=>{sp={name:'',start:fmt(Math.max(s,r5(Math.ceil(nowH()*4)/4))),dur:[3,2,1,.5].find(x=>x<=e-s+1e-6)||.5};renderSpont()};return el}
+function fillList(box,dow,list,tapGaps){let prev=null;const h=nowH();
+  list.forEach(b=>{if(prev!==null&&b[0]-prev>=.25-1e-6){const s=prev,e=b[0];if(!(tapGaps&&e<=h))box.appendChild(gapEl(s,e,tapGaps&&e>h))}
+    box.appendChild(lineEl(dow,b,dow===todayIdx));prev=Math.max(prev||0,b[1])})}
 function renderToday(){
   const box=$('tasks');box.innerHTML='';const list=blocksFor(todayIdx);let n=0,c=0;
-  list.forEach(b=>{if(b[4]){n++;if(isDone(todayIdx,b[2]))c++}box.appendChild(lineEl(todayIdx,b,true))});
+  list.forEach(b=>{if(b[4]){n++;if(isDone(todayIdx,b[2]))c++}});fillList(box,todayIdx,list,true);
   $('prog').textContent=n?c+' / '+n+' done':'';
 }
 
@@ -494,7 +511,7 @@ function renderWeek(){
   $('dayTitle').textContent=(editing?'Usual ':'')+DN[sel]+(sel===todayIdx&&!editing?' (today)':'');
   $('editDay').textContent=editing?'Done':'Edit';
   const L=$('dayList');L.innerHTML='';
-  if(!editing){blocksFor(sel).forEach(b=>L.appendChild(lineEl(sel,b,sel===todayIdx)));return}
+  if(!editing){fillList(L,sel,blocksFor(sel),sel===todayIdx);return}
   const list=W(sel).map(b=>b.slice());
   list.forEach((b,i)=>{const r=document.createElement('div');r.className='ed';
     r.innerHTML=`<input type="time" class="t0"><input type="time" class="t1"><button class="x">×</button><input class="nm" placeholder="Block name"><input class="st" placeholder="First tiny step"><select class="gl"><option value="">No goal</option>${GOALS.map(g=>`<option>${g}</option>`).join('')}</select><select class="fx"><option value="0">Flexible — planner may move it</option><option value="1">Fixed time</option></select>`;
