@@ -100,7 +100,12 @@
   .ln.gap{min-height:0;cursor:default}
   .ln.gap .tm{padding-top:8px}.ln.gap .tm b{font-weight:400;color:var(--mid);font-size:12.5px}
   .ln.gap .body{background:transparent;border:1px dashed var(--rule);padding:8px 14px;color:var(--mid);font-size:13px;display:flex;justify-content:space-between;gap:8px}
-  .ln.gap.tap{cursor:pointer}.ln.gap.tap:hover .body{color:var(--ink)}
+  .ln.gap.tap .body{display:block}
+  .ln.gap .gh{display:flex;justify-content:space-between;gap:8px}
+  .sugs{display:flex;flex-direction:column;gap:6px;margin-top:9px}
+  .sug{display:flex;justify-content:space-between;gap:10px;align-items:baseline;text-align:left;background:var(--card);padding:9px 12px;color:var(--ink);font-size:13.5px}
+  .sug span{color:var(--mid);font-size:12px;white-space:nowrap}
+  .sug:active{background:var(--ink);color:var(--paper)}
   /* week */
   .drow{background:var(--card);border-radius:0;display:flex;gap:14px;padding:14px 16px;margin-bottom:8px;cursor:pointer}
   .drow .L{width:34px;flex:none;text-align:center}
@@ -489,10 +494,59 @@ function renderStrip(){
     b.onclick=()=>{if(i===todayIdx)return;sel=i;editing=false;renderWeek();show('week');setTimeout(()=>$('dayTitle').scrollIntoView({block:'center'}),50)};S.appendChild(b)});
 }
 const dur=h=>{const m=Math.round(h*60);return m>=60?Math.floor(m/60)+' h'+(m%60?' '+(m%60)+' min':''):m+' min'};
+let shownSug=new Set();
+const SUG=[
+ // name, first step, goal, minutes, earliest, latest, kind
+ ['Walk outside, no phone','Shoes on, door open.',null,20,7,21,'body'],
+ ['Stretch + a glass of water','Stand up, arms up.',null,10,7,23,'body'],
+ ['Rest — lie down, phone in another room','Set a 20-min timer.',null,20,11,22,'rest'],
+ ['15 Dutch words on Anki','Open Anki, start the deck.','Dutch',15,7,22,'light'],
+ ['Dutch podcast while walking','Pick one episode.','Dutch',30,8,21,'body'],
+ ['Bass — 20 minutes','Pick up the bass.','Bass',20,9,22.5,'rest'],
+ ['Investing — read 20 pages','Open the book at your bookmark.','Investing',25,8,22.5,'light'],
+ ['One extra job application','Open the job list, pick ONE.','Job search',45,8,19,'work'],
+ ['Portfolio — fix one page','Open the PDF, pick one page.','Portfolio',45,8,20,'work'],
+ ['Jewelry — photograph 3 pieces','Daylight by the window.','Jewelry',40,9,16.5,'work'],
+ ['Jewelry — schedule 2 posts on the laptop','Open the laptop, not the phone.','Jewelry',30,9,21,'light'],
+ ['Revit — one tutorial','Open the tutorial, sound on.','Revit + rendering',45,8,20,'work'],
+ ['Gym or a run','Clothes on. That\'s it.','Gym',60,7,20,'body'],
+ ['Tidy one surface','Clear the desk.',null,15,8,22,'light'],
+ ['Call or text a friend','Pick one person.',null,20,10,21.5,'rest'],
+ ['Plan tomorrow — 10 min','Write tomorrow\'s top 3.',null,10,17,22.5,'light'],
+ ['Cook something nice','Pick one recipe.',null,45,17,20.5,'rest']
+];
+function suggest(s,e){
+  const len=(e-s)*60,p=plan()||{},moods=p.moods||[],low=p.energy==='low'||moods.some(m=>['tired','sick','sad','overwhelmed'].includes(m));
+  const stressed=moods.some(m=>['stressed','anxious','restless'].includes(m));
+  const today=blocksFor(todayIdx),names=today.map(b=>b[2]),goalsToday=today.map(b=>b[4]);
+  const week=ORDER.flatMap(i=>blocksFor(i).map(b=>b[4])).filter(Boolean);
+  return SUG.filter(x=>x[3]<=len+1&&s>=x[4]-1e-6&&s+x[3]/60<=x[5]+1e-6&&!names.includes(x[0])&&!shownSug.has(x[0])&&!(x[2]==='Gym'&&goalsToday.includes('Gym')))
+   .map(x=>{let sc=0;
+     if(low)sc+=x[6]==='rest'?4:x[6]==='body'?2:x[6]==='light'?1:-4;
+     if(stressed)sc+=x[6]==='body'?3:x[6]==='rest'?1:0;
+     if(!low&&!stressed)sc+=x[6]==='work'?2:x[6]==='light'?1:0;
+     if(x[2]&&(p.prios||[]).includes(x[2]))sc+=4;
+     if(x[2])sc+=Math.max(0,3-week.filter(g=>g===x[2]).length);   // goals that get little time this week
+     if(s>=19&&x[6]==='work')sc-=2;
+     sc+=((Math.floor(s*4)+x[0].length)%5)/10;                    // stable tie-break
+     return[sc,x]}).sort((a,b)=>b[0]-a[0]).slice(0,2).map(a=>{shownSug.add(a[1][0]);return a[1]});
+}
+function addBlock(x,s,e){
+  const len=Math.min(e-s,x[3]/60);const blk=[r5(s),r5(s+len),x[0],x[1],x[2],'away',null,true];
+  let p=plan();if(!p){p=state.plans[todayKey]={energy:'ok',moods:[],prios:[],note:'',extras:[],blocks:W(todayIdx).map(b=>b.slice()),later:[],tip:'',source:'planner'}}
+  p.blocks=p.blocks.concat([blk]).sort((a,b)=>a[0]-b[0]);p.extras=(p.extras||[]).concat([blk]);
+  save();renderAll();scheduleReminders();toast('Added: '+x[0]+' at '+fmt(blk[0]));
+}
 function gapEl(s,e,tap){const el=document.createElement('div');el.className='ln gap'+(tap?' tap':'');
-  el.innerHTML=`<div class="tm"><b>${fmt(s)}</b></div><div class="rail"></div><div class="body"><span>Free time · ${dur(e-s)}</span>${tap?'<span>+ add</span>':''}</div>`;
-  if(tap)el.onclick=()=>{sp={name:'',start:fmt(Math.max(s,r5(Math.ceil(nowH()*4)/4))),dur:[3,2,1,.5].find(x=>x<=e-s+1e-6)||.5};renderSpont()};return el}
-function fillList(box,dow,list,tapGaps){let prev=null;const h=nowH();
+  const start=tap?Math.max(s,r5(Math.ceil(nowH()*12)/12)):s;
+  el.innerHTML=`<div class="tm"><b>${fmt(start)}</b></div><div class="rail"></div><div class="body"><div class="gh"><span>Free time · ${dur(e-start)}</span>${tap?'<button class="other">+ other</button>':''}</div>${tap?'<div class="sugs"></div>':''}</div>`;
+  if(tap){
+    const box=el.querySelector('.sugs');
+    suggest(start,e).forEach(x=>{const b=document.createElement('button');b.className='sug';b.innerHTML=`${esc(x[0])}<span>${dur(Math.min(e-start,x[3]/60))}</span>`;b.onclick=()=>addBlock(x,start,e);box.appendChild(b)});
+    el.querySelector('.other').onclick=()=>{sp={name:'',start:fmt(start),dur:[3,2,1,.5].find(x=>x<=e-start+1e-6)||.5};renderSpont()};
+  }
+  return el}
+function fillList(box,dow,list,tapGaps){let prev=null;if(tapGaps)shownSug=new Set();const h=nowH();
   list.forEach(b=>{if(prev!==null&&b[0]-prev>=.25-1e-6){const s=prev,e=b[0];if(!(tapGaps&&e<=h))box.appendChild(gapEl(s,e,tapGaps&&e>h))}
     box.appendChild(lineEl(dow,b,dow===todayIdx));prev=Math.max(prev||0,b[1])})}
 function renderToday(){
